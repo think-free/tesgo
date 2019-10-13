@@ -27,6 +27,20 @@ func main() {
 	envy.Parse("TESGO")
 	flag.Parse()
 
+	// Create database
+	// Create database
+	req, err := http.NewRequest("POST", "http://"+*influxHost+":8086/query?q=CREATE%20DATABASE%20"+*influxDatabase, nil)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	_, err = http.DefaultClient.Do(req)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
 	// Mqtt client
 	cli := mqttclient.NewMqttClient("Device_Influxdb", *broker)
 	//cli.SetUserPass("backend", "axihome5homeautomation")
