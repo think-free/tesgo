@@ -89,14 +89,20 @@ func (q *InfluxQuery) GetAll(dateStart string) []Session {
 		lastEnd = end
 	}
 
-	if dateStart == time.Now().Format("2006-01-02") {
+	loc, err := time.LoadLocation(q.TimeZone)
+	if err != nil {
+		log.Println(err)
+	}
+	now := time.Now().In(loc)
 
-		if lastEnd.Add(time.Minute).Before(time.Now()) {
+	if dateStart == now.Format("2006-01-02") {
+
+		if lastEnd.Add(time.Minute).Before(now) {
 
 			returnSession = append(returnSession, Session{
 				Type:  "idle",
 				Start: lastEnd.Format("15:04:05"),
-				End:   time.Now().Format("15:04:05"),
+				End:   now.Format("15:04:05"),
 				Data:  q.getIdleData(lastEnd.Format(time.RFC3339), time.Now().Format(time.RFC3339)),
 			})
 		}
@@ -320,6 +326,22 @@ func (q *InfluxQuery) getSleepData(start, end string) map[string]interface{} {
 
 	ret := make(map[string]interface{})
 
+	// Time spent
+	startT, _ := time.Parse(time.RFC3339, start)
+	endT, _ := time.Parse(time.RFC3339, end)
+	diff := endT.Sub(startT)
+	ret["time"] = strings.Replace(strings.Split(diff.String(), "m")[0], "h", ":", -1)
+	if !strings.Contains(ret["time"].(string), ":") {
+		if len(ret["time"].(string)) > 1 {
+			ret["time"] = "00:" + ret["time"].(string)
+		} else {
+			ret["time"] = "00:0" + ret["time"].(string)
+		}
+	}
+	if len(ret["time"].(string)) == 4 {
+		ret["time"] = "0" + ret["time"].(string)
+	}
+
 	return ret
 }
 
@@ -332,6 +354,59 @@ func (q *InfluxQuery) getChargeData(start, end string) map[string]interface{} {
 	ret["battery_level_end"] = q.getSingleValue(q.querySpecificInflux("last(*)", "battery_level", start, end))
 	if ret["battery_level_end"] != nil && ret["battery_level_start"] != nil {
 		ret["battery_added"] = ret["battery_level_end"].(float64) - ret["battery_level_start"].(float64)
+	}
+
+	// Km added
+	ret["charge_km_added_rated"] = math.Floor(q.getSingleValue(q.querySpecificInflux("last(*)", "charge_miles_added_rated", start, end)).(float64) * 1.60934)
+
+	// Position
+	ret["latitude"] = q.getSingleValue(q.querySpecificInflux("first(*)", "latitude", start, end))
+	ret["longitude"] = q.getSingleValue(q.querySpecificInflux("first(*)", "longitude", start, end))
+
+	// Charger voltage / intensity
+
+	ret["charger_voltage_max"] = q.getSingleValue(q.querySpecificInflux("max(*)", "charger_voltage", start, end))
+	ret["charger_voltage_min"] = q.getSingleValue(q.querySpecificInflux("min(*)", "charger_voltage", start, end))
+	ret["charger_voltage_avg"] = q.getSingleValue(q.querySpecificInflux("mean(*)", "charger_voltage", start, end))
+	if ret["charger_voltage_avg"] != nil {
+		ret["charger_voltage_avg"] = math.Floor(ret["charger_voltage_avg"].(float64)*100) / 100
+	}
+
+	ret["charger_current_max"] = q.getSingleValue(q.querySpecificInflux("max(*)", "charger_actual_current", start, end))
+	ret["charger_current_min"] = q.getSingleValue(q.querySpecificInflux("min(*)", "charger_actual_current", start, end))
+	ret["charger_current_avg"] = q.getSingleValue(q.querySpecificInflux("mean(*)", "charger_actual_current", start, end))
+	if ret["charger_current_avg"] != nil {
+		ret["charger_current_avg"] = math.Floor(ret["charger_current_avg"].(float64)*100) / 100
+	}
+
+	// Temperature
+	ret["outside_temp_max"] = q.getSingleValue(q.querySpecificInflux("max(*)", "outside_temp", start, end))
+	ret["outside_temp_min"] = q.getSingleValue(q.querySpecificInflux("min(*)", "outside_temp", start, end))
+	ret["outside_temp_avg"] = q.getSingleValue(q.querySpecificInflux("mean(*)", "outside_temp", start, end))
+	if ret["outside_temp_avg"] != nil {
+		ret["outside_temp_avg"] = math.Floor(ret["outside_temp_avg"].(float64)*10) / 10
+	}
+	ret["inside_temp_max"] = q.getSingleValue(q.querySpecificInflux("max(*)", "inside_temp", start, end))
+	ret["inside_temp_min"] = q.getSingleValue(q.querySpecificInflux("min(*)", "inside_temp", start, end))
+	ret["inside_temp_avg"] = q.getSingleValue(q.querySpecificInflux("mean(*)", "inside_temp", start, end))
+	if ret["inside_temp_avg"] != nil {
+		ret["inside_temp_avg"] = math.Floor(ret["inside_temp_avg"].(float64)*10) / 10
+	}
+
+	// Time spent
+	startT, _ := time.Parse(time.RFC3339, start)
+	endT, _ := time.Parse(time.RFC3339, end)
+	diff := endT.Sub(startT)
+	ret["time"] = strings.Replace(strings.Split(diff.String(), "m")[0], "h", ":", -1)
+	if !strings.Contains(ret["time"].(string), ":") {
+		if len(ret["time"].(string)) > 1 {
+			ret["time"] = "00:" + ret["time"].(string)
+		} else {
+			ret["time"] = "00:0" + ret["time"].(string)
+		}
+	}
+	if len(ret["time"].(string)) == 4 {
+		ret["time"] = "0" + ret["time"].(string)
 	}
 
 	return ret
@@ -366,7 +441,46 @@ func (q *InfluxQuery) getDriveData(start, end string) map[string]interface{} {
 	}
 
 	// Wh/km : 520 = 52 Kw/h -> SR+
-	ret["kwh_km"] = math.Floor((520 * ret["battery_used"].(float64)) / ret["km_driven"].(float64))
+	if ret["battery_used"] != nil && ret["km_driven"] != nil {
+		ret["Wh_used"] = math.Floor((520 * ret["battery_used"].(float64)))
+		ret["Wh/km"] = math.Floor((520 * ret["battery_used"].(float64)) / ret["km_driven"].(float64))
+	}
+
+	// Temperature
+	ret["outside_temp_max"] = q.getSingleValue(q.querySpecificInflux("max(*)", "outside_temp", start, end))
+	ret["outside_temp_min"] = q.getSingleValue(q.querySpecificInflux("min(*)", "outside_temp", start, end))
+	ret["outside_temp_avg"] = q.getSingleValue(q.querySpecificInflux("mean(*)", "outside_temp", start, end))
+	if ret["outside_temp_avg"] != nil {
+		ret["outside_temp_avg"] = math.Floor(ret["outside_temp_avg"].(float64)*10) / 10
+	}
+	ret["inside_temp_max"] = q.getSingleValue(q.querySpecificInflux("max(*)", "inside_temp", start, end))
+	ret["inside_temp_min"] = q.getSingleValue(q.querySpecificInflux("min(*)", "inside_temp", start, end))
+	ret["inside_temp_avg"] = q.getSingleValue(q.querySpecificInflux("mean(*)", "inside_temp", start, end))
+	if ret["inside_temp_avg"] != nil {
+		ret["inside_temp_avg"] = math.Floor(ret["inside_temp_avg"].(float64)*10) / 10
+	}
+
+	// Fan speed avg
+	ret["fan_speed_avg"] = q.getSingleValue(q.querySpecificInflux("mean(*)", "fan_status", start, end))
+	if ret["fan_speed_avg"] != nil {
+		ret["fan_speed_avg"] = math.Floor(ret["fan_speed_avg"].(float64))
+	}
+
+	// Time spent
+	startT, _ := time.Parse(time.RFC3339, start)
+	endT, _ := time.Parse(time.RFC3339, end)
+	diff := endT.Sub(startT)
+	ret["time"] = strings.Replace(strings.Split(diff.String(), "m")[0], "h", ":", -1)
+	if !strings.Contains(ret["time"].(string), ":") {
+		if len(ret["time"].(string)) > 1 {
+			ret["time"] = "00:" + ret["time"].(string)
+		} else {
+			ret["time"] = "00:0" + ret["time"].(string)
+		}
+	}
+	if len(ret["time"].(string)) == 4 {
+		ret["time"] = "0" + ret["time"].(string)
+	}
 
 	return ret
 }
@@ -375,11 +489,45 @@ func (q *InfluxQuery) getIdleData(start, end string) map[string]interface{} {
 
 	ret := make(map[string]interface{})
 
+	// Position
+	ret["latitude"] = q.getSingleValue(q.querySpecificInflux("first(*)", "latitude", start, end))
+	ret["longitude"] = q.getSingleValue(q.querySpecificInflux("first(*)", "longitude", start, end))
+
 	// Battery
 	ret["battery_level_start"] = q.getSingleValue(q.querySpecificInflux("first(*)", "battery_level", start, end))
 	ret["battery_level_end"] = q.getSingleValue(q.querySpecificInflux("last(*)", "battery_level", start, end))
 	if ret["battery_level_end"] != nil && ret["battery_level_start"] != nil {
 		ret["battery_used"] = ret["battery_level_start"].(float64) - ret["battery_level_end"].(float64)
+	}
+
+	// Temperature
+	ret["outside_temp_max"] = q.getSingleValue(q.querySpecificInflux("max(*)", "outside_temp", start, end))
+	ret["outside_temp_min"] = q.getSingleValue(q.querySpecificInflux("min(*)", "outside_temp", start, end))
+	ret["outside_temp_avg"] = q.getSingleValue(q.querySpecificInflux("mean(*)", "outside_temp", start, end))
+	if ret["outside_temp_avg"] != nil {
+		ret["outside_temp_avg"] = math.Floor(ret["outside_temp_avg"].(float64)*10) / 10
+	}
+	ret["inside_temp_max"] = q.getSingleValue(q.querySpecificInflux("max(*)", "inside_temp", start, end))
+	ret["inside_temp_min"] = q.getSingleValue(q.querySpecificInflux("min(*)", "inside_temp", start, end))
+	ret["inside_temp_avg"] = q.getSingleValue(q.querySpecificInflux("mean(*)", "inside_temp", start, end))
+	if ret["inside_temp_avg"] != nil {
+		ret["inside_temp_avg"] = math.Floor(ret["inside_temp_avg"].(float64)*10) / 10
+	}
+
+	// Time spent
+	startT, _ := time.Parse(time.RFC3339, start)
+	endT, _ := time.Parse(time.RFC3339, end)
+	diff := endT.Sub(startT)
+	ret["time"] = strings.Replace(strings.Split(diff.String(), "m")[0], "h", ":", -1)
+	if !strings.Contains(ret["time"].(string), ":") {
+		if len(ret["time"].(string)) > 1 {
+			ret["time"] = "00:" + ret["time"].(string)
+		} else {
+			ret["time"] = "00:0" + ret["time"].(string)
+		}
+	}
+	if len(ret["time"].(string)) == 4 {
+		ret["time"] = "0" + ret["time"].(string)
 	}
 
 	return ret

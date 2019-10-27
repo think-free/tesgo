@@ -7,6 +7,8 @@ import (
 	"net/http/httputil"
 	"net/url"
 
+	rice "github.com/GeertJohan/go.rice"
+
 	"github.com/think-free/tesgo/tesgui/influxquery"
 )
 
@@ -40,8 +42,12 @@ func (server *HTTPServer) Run() {
 
 	// Server version installation
 	http.HandleFunc("/daysummary", server.daysummary)
+
+	box := rice.MustFindBox("../gui/out/")
+	http.Handle("/", http.FileServer(box.HTTPBox()))
+
 	u, _ := url.Parse(server.tesgoHost)
-	http.Handle("/", httputil.NewSingleHostReverseProxy(u))
+	http.Handle("/api/", http.StripPrefix("/api", httputil.NewSingleHostReverseProxy(u)))
 
 	// Client app managment
 
@@ -51,6 +57,8 @@ func (server *HTTPServer) Run() {
 /* Server version installation */
 
 func (server *HTTPServer) daysummary(w http.ResponseWriter, r *http.Request) {
+
+	w.Header().Set("Content-Type", "application/json")
 
 	dateParam, ok := r.URL.Query()["date"]
 	if !ok || len(dateParam[0]) < 1 {
