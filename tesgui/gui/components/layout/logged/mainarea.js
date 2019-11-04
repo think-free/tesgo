@@ -112,7 +112,7 @@ class MainArea extends React.Component {
 
     async getData(url){
         var date = new Date()
-        var url = "/daysummary?date=" + date.getFullYear() + "-" + (date.getMonth() + 1) + "-" + date.getDate()
+        var url = "/daysummary?date=" + date.getFullYear() + "-" + ("0" + (date.getMonth() + 1)).slice(-2) + "-" + ("0" + date.getDate()).slice(-2)
 
         fetch(url)
         .then(response => response.json())

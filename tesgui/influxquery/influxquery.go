@@ -123,6 +123,14 @@ func (q *InfluxQuery) GetSleeps(dateStart string) []Session {
 	sleepSession := Session{Type: "sleep"}
 	var sleepSessions []Session
 
+	if len(ir.Results) == 0 {
+		return sleepSessions
+	}
+
+	if len(ir.Results[0].Series) == 0 {
+		return sleepSessions
+	}
+
 	for _, v := range ir.Results[0].Series[0].Values {
 
 		if v[1].(float64) == 0 {
@@ -161,6 +169,14 @@ func (q *InfluxQuery) GetCharges(dateStart string) []Session {
 	chargeSession := Session{Type: "charge"}
 	var chargeSessions []Session
 
+	if len(ir.Results) == 0 {
+		return chargeSessions
+	}
+
+	if len(ir.Results[0].Series) == 0 {
+		return chargeSessions
+	}
+
 	for _, v := range ir.Results[0].Series[0].Values {
 
 		if v[1].(float64) > 0 {
@@ -198,6 +214,14 @@ func (q *InfluxQuery) GetDrives(dateStart string) []Session {
 	drive := false
 	driveSession := Session{Type: "drive"}
 	var driveSessions []Session
+
+	if len(ir.Results) == 0 {
+		return driveSessions
+	}
+
+	if len(ir.Results[0].Series) == 0 {
+		return driveSessions
+	}
 
 	for _, v := range ir.Results[0].Series[0].Values {
 

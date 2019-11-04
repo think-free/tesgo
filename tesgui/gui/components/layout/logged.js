@@ -1,3 +1,4 @@
+import Head from 'next/head'
 import Link from 'next/link'
 import fetch from 'isomorphic-unfetch'
 import { connect } from 'react-redux';
@@ -38,6 +39,9 @@ class Logged extends React.Component {
 
         return (
             <StyleRoot>
+                <Head>
+                    <link rel="manifest" href="/static/manifest.json"/>
+                </Head>
                 <div style={htmlStyle}>
                     <style global jsx>{`
                       html,
