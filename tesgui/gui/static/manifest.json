@@ -1,0 +1,26 @@
+{
+    "short_name": "Tesgo",
+    "name": "",
+    "icons": [
+      {
+        "src": "/static/icons/tesla.png",
+        "sizes": "100x100",
+        "type": "image/png"
+      },
+      {
+        "src": "/static/icons/tesla.png",
+        "sizes": "145x145",
+        "type": "image/png"
+      },
+      {
+        "src": "/static/icons/tesla.png",
+        "sizes": "512x512",
+        "type": "image/png"
+      }
+    ],
+    "start_url": "/",
+    "display": "fullscreen",
+    "background_color": "#1F1F27",
+    "theme_color": "#1F1F27"
+  }
+  
